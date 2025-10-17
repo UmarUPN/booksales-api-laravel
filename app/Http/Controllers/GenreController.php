@@ -57,4 +57,83 @@ class GenreController extends Controller
         ], 201);
     }
 
+    public function show(string $id)
+    {
+        $genre = Genre::find($id);
+
+        return $genre
+        ?
+            response()->json([
+                'status' => true,
+                'message' => 'Get Detail Resource',
+                'data' => $genre
+            ], 200)
+        :
+            response()->json([
+                'status' => false,
+                'message' => 'Resource Not Found!'
+            ], 404)
+        ;
+    }
+
+    public function update(string $id, Request $request)
+    {
+        # 1. mencari data
+        $genre = Genre::find($id);
+
+        if (!$genre) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Resource Not Found!'
+            ], 404);
+        }
+
+        # 2. validator
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:100',
+            'description' => 'required|string'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'message' => $validator->errors()
+            ], 404);
+        }
+
+        # 3. siapkan data yang ingin diupdate
+        $data = [
+            'name' => 'required|string|max:100',
+            'description' => 'required|string'
+        ];
+
+        # 4. update data baru ke database
+        $genre->update($data);
+
+        return response()->json([
+                'status' => true,
+                'message' => 'Resource Updated Successfully!',
+                'data' => $genre
+            ], 200);
+    }
+
+    public function destroy(string $id)
+    {
+        $genre = Genre::find($id);
+
+        if (!$genre) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Resource Not Found!'
+            ], 404);
+        }
+
+        $genre->delete();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Delete Resource Successfully'
+        ]);
+    }
+
 }
