@@ -63,6 +63,6 @@ class BookSeeder extends Seeder
             'genre_id' => 5,
             'author_id' => 5
         ]);
-
     }
+
 }

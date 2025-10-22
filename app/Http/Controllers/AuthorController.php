@@ -110,10 +110,7 @@ class AuthorController extends Controller
         }
 
         # 3. siapkan data yang ingin diupdate
-        $data = [
-            'name' => 'required|string|max:100',
-            'bio' => 'required|string'
-        ];
+        $data = $request->only(['name', 'bio']);
 
         # 4. handle image (upload $ delete image lama)
         if ($request->hasFile('photo')) {
