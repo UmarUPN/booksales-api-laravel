@@ -102,10 +102,7 @@ class GenreController extends Controller
         }
 
         # 3. siapkan data yang ingin diupdate
-        $data = [
-            'name' => 'required|string|max:100',
-            'description' => 'required|string'
-        ];
+        $data = $request->only(['name', 'description']);
 
         # 4. update data baru ke database
         $genre->update($data);
