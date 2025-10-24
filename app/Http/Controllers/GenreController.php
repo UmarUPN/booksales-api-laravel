@@ -46,7 +46,7 @@ class GenreController extends Controller
         # 3. insert data
         $genre = Genre::create([
             'name' => $request->name,
-            'description' => $request->bio
+            'description' => $request->description
         ]);
 
         # 5. response
