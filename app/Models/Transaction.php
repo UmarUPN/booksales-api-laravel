@@ -9,19 +9,36 @@ class Transaction extends Model
     protected $table = 'transactions';
 
     protected $fillable = [
-        'order_number',
-        'customer_id',
-        'book_id',
-        'total_amount'
+        'user_id',
+        'transaction_code',
+        'total_amount',
+        'status'
     ];
 
     public function user()
     {
-        return $this->belongsTo(User::class, 'customer_id');
+        return $this->belongsTo(User::class);
     }
 
-    public function book()
+    public function items()
     {
-        return $this->belongsTo(Book::class);
+        return $this->hasMany(TransactionItem::class);
     }
+
+    // protected $fillable = [
+    //     'order_number',
+    //     'customer_id',
+    //     'book_id',
+    //     'total_amount'
+    // ];
+
+    // public function user()
+    // {
+    //     return $this->belongsTo(User::class, 'customer_id');
+    // }
+
+    // public function book()
+    // {
+    //     return $this->belongsTo(Book::class);
+    // }
 }

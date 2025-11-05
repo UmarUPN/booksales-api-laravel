@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Book;
+use App\Models\User;
+use App\Models\CartItem;
 use App\Models\Transaction;
+use App\Models\TransactionItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -12,14 +15,14 @@ class TransactionController extends Controller
 {
     public function index()
     {
-        $transaction = Transaction::with('user', 'book')->get();
+        $transactions = Transaction::with(['user', 'items.book'])->get();
 
-        return $transaction->isNotEmpty()
+        return $transactions->isNotEmpty()
         ?
             response()->json([
                 'status' => true,
                 'message' => 'Get All Resource',
-                'data' => $transaction
+                'data' => $transactions
             ], 200)
         :
             response()->json([
@@ -31,88 +34,96 @@ class TransactionController extends Controller
 
     public function store(Request $request)
     {
-        # 1. validator dan cek validator
-        $validator = Validator::make($request->all(), [
-            'book_id' => 'required|exists:books,id',
-            'quantity' => 'required|integer|min:1'
-        ]);
+        # 1. Get user's cart items
+        $cartItems = CartItem::with('book.author')->where('user_id', auth()->id())->get();
 
-        if ($validator->fails()) {
+        if ($cartItems->isEmpty()) {
             return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'data' => $validator->errors()
-            ], 422);
-        }
-
-        # 2. generate order_number -> unique | ORD-0243254464
-        $uniqueCode = "ORD-" . strtoupper(uniqid());
-
-        # 3. ambil user yang sedang login & cek login (apakah ada data user)
-        $user = auth('api')->user();
-
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized!'
-            ], 401);
-        }
-
-        # 4. mencari data buku dari request
-        $book = Book::find($request->book_id);
-
-        # 5. cek stok buku
-        if ($book->stock < $request->quantity) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Stok buku tidak cukup'
+                'status' => false,
+                'message' => 'Cart is empty'
             ], 400);
         }
 
-        # 6. hitung total harga
-        $totalAmount = $book->price * $request->quantity;
+        # 2. Validate stock availability
+        foreach ($cartItems as $cartItem) {
+            if ($cartItem->book->stock < $cartItem->quantity) {
+                return response()->json([
+                    'status' => false,
+                    'message' => "Insufficient stock for '{$cartItem->book->title}'. Available: {$cartItem->book->stock}, Requested: {$cartItem->quantity}"
+                ], 400);
+            }
+        }
 
-        # 7. kurangi stok di database
-        $book->stock -= $request->quantity;
-        $book->save();
+        # 3. Calculate total amount
+        $totalAmount = $cartItems->sum(function ($item) {
+            return $item->book->price * $item->quantity;
+        });
 
-        # 8. simpan data transaksi
+        # 4. Create transaction
         $transaction = Transaction::create([
-            'order_number' => $uniqueCode,
-            'customer_id' => $user->id,
-            'book_id' => $request->book_id,
-            'total_amount' => $totalAmount
+            'user_id' => auth()->id(),
+            'transaction_code' => 'INV-' . strtoupper(uniqid()),
+            'total_amount' => $totalAmount,
+            'status' => 'pending'
         ]);
 
+        # 5. Create transaction items and update book stock
+        foreach ($cartItems as $cartItem) {
+            TransactionItem::create([
+                'transaction_id' => $transaction->id,
+                'book_id' => $cartItem->book_id,
+                'quantity' => $cartItem->quantity,
+                'price' => $cartItem->book->price,
+                'book_title' => $cartItem->book->title, // nyambung antar model
+                'author_name' => $cartItem->book->author->name // $cartItem->book->author->name digunakan untuk mengambil nama penulis dari relasi 'author' pada model 'Book'.
+            ]);
+
+            # Update book stock
+            $cartItem->book->decrement('stock', $cartItem->quantity);
+        }
+
+        # 6. Clear user's cart
+        CartItem::where('user_id', auth()->id())->delete();
+
+        # 7. Load relationship for response
+        $transaction->load('items.book');
+
         return response()->json([
-            'success' => true,
-            'message' => 'Transaction created successfully!',
+            'status' => true,
+            'message' => 'Transaction Created Successfully!',
             'data' => $transaction
         ], 201);
     }
 
     public function show(string $id)
     {
-        $transaction = Transaction::with('user', 'book')->find($id);
+        $transaction = Transaction::with(['user', 'items.book'])->find($id);
 
-        return $transaction
-        ?
-            response()->json([
-                'status' => true,
-                'message' => 'Get Detail Resource',
-                'data' => $transaction
-            ], 200)
-        :
-            response()->json([
+        if (!$transaction) {
+            return response()->json([
                 'status' => false,
                 'message' => 'Resource Not Found!'
-            ], 404)
-        ;
+            ], 404);
+        }
+
+        # Check authorization (user can only see their own transactions, admin can see all)
+        if (auth()->user()->role !== 'admin' && $transaction->user_id !== auth()->id()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized Access!'
+            ], 403);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Get Detail Resource',
+            'data' => $transaction
+        ], 200);
     }
 
     public function update(string $id, Request $request)
     {
-        # 1. cari transaksi
+        # 1. Find transaction
         $transaction = Transaction::find($id);
 
         if (!$transaction) {
@@ -122,10 +133,9 @@ class TransactionController extends Controller
             ], 404);
         }
 
-        # 2. validasi input
+        # 2. Validator (only status update for admin)
         $validator = Validator::make($request->all(), [
-            'book_id' => 'required|exists:books,id',
-            'quantity' => 'required|integer|min:1'
+            'status' => 'required|in:pending,paid,cancelled'
         ]);
 
         if ($validator->fails()) {
@@ -135,35 +145,95 @@ class TransactionController extends Controller
             ], 422);
         }
 
-        # 3. kembalikan stok buku lama
-        $oldBook = Book::find($transaction->book_id);
-        $oldQuantity = $transaction->total_amount / $oldBook->price; // jumlah lama
-        $oldBook->stock += $oldQuantity;
-        $oldBook->save();
+        # 3. Handle status change to 'paid' - update user balances
+        if ($request->status === 'paid' && $transaction->status !== 'paid') {
+            DB::beginTransaction();
+            try {
+                # Get current user and admin
+                $user = User::find($transaction->user_id);
+                $admin = User::find(1); // Admin user with ID 1
 
-        # 4. cek stok buku baru
-        $newBook = Book::find($request->book_id);
-        if ($newBook->stock < $request->quantity) {
-            // kembalikan stok lama jika gagal
-            $oldBook->stock -= $oldQuantity;
-            $oldBook->save();
+                if (!$user || !$admin) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'User or admin not found'
+                    ], 404);
+                }
 
-            return response()->json([
-                'status' => false,
-                'message' => 'Stok buku tidak cukup'
-            ], 400);
+                # Check if user has sufficient balance
+                if ($user->balance < $transaction->total_amount) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => "Insufficient balance to complete payment. Your Balance: {$user->balance}, Total Payment Required: {$transaction->total_amount}"
+                    ], 400);
+                }
+
+                # Update balances
+                $user->decrement('balance', $transaction->total_amount);
+                $admin->increment('balance', $transaction->total_amount);
+
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Failed to update balances: ' . $e->getMessage()
+                ], 500);
+            }
         }
 
-        # 5. hitung total baru dan kurangi stok buku baru
-        $totalAmount = $newBook->price * $request->quantity;
-        $newBook->stock -= $request->quantity;
-        $newBook->save();
+        # 4. Handle status change to 'cancelled' - restore book stock and refund if was paid
+        if ($request->status === 'cancelled' && $transaction->status !== 'cancelled') {
+            DB::beginTransaction();
+            try {
+                # If transaction was paid, refund the money
+                if ($transaction->status === 'paid') {
+                    $user = User::find($transaction->user_id);
+                    $admin = User::find(1);
 
-        # 6. update transaksi
+                    if ($user && $admin) {
+                        # Refund user and deduct from admin
+                        $user->increment('balance', $transaction->total_amount);
+                        $admin->decrement('balance', $transaction->total_amount);
+                    }
+                }
+
+                # Restore book stock
+                foreach ($transaction->items as $item) {
+                    Book::where('id', $item->book_id)->increment('stock', $item->quantity);
+                }
+
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Failed to cancel transaction: ' . $e->getMessage()
+                ], 500);
+            }
+        }
+
+        # 5. Handle status change from 'cancelled' to other status - deduct stock again
+        if ($transaction->status === 'cancelled' && $request->status !== 'cancelled') {
+            foreach ($transaction->items as $item) {
+                $book = Book::find($item->book_id);
+                if ($book->stock < $item->quantity) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => "Cannot change status. Insufficient stock for '{$item->book_title}'. Available: {$book->stock}, Required: {$item->quantity}"
+                    ], 400);
+                }
+                $book->decrement('stock', $item->quantity);
+            }
+        }
+
+        # 6. Update transaction status
         $transaction->update([
-            'book_id' => $request->book_id,
-            'total_amount' => $totalAmount
+            'status' => $request->status
         ]);
+
+        # 7. Load relationship for response
+        $transaction->load('items.book');
 
         return response()->json([
             'status' => true,
@@ -183,20 +253,18 @@ class TransactionController extends Controller
             ], 404);
         }
 
-        DB::transaction(function () use ($transaction) {
-            $book = Book::find($transaction->book_id);
-            $previousQuantity = $transaction->total_amount / $book->price;
+        # Restore book stock if transaction is not cancelled
+        if ($transaction->status !== 'cancelled') {
+            foreach ($transaction->items as $item) {
+                Book::where('id', $item->book_id)->increment('stock', $item->quantity);
+            }
+        }
 
-            $book->stock += $previousQuantity;
-            $book->save();
-
-            $transaction->delete();
-        });
+        $transaction->delete();
 
         return response()->json([
             'status' => true,
-            'message' => 'Resource Deleted Successfully!'
+            'message' => 'Delete Resource Successfully'
         ], 200);
     }
-
 }

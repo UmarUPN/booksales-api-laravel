@@ -39,5 +39,25 @@ class GenreSeeder extends Seeder
             'description' => 'Genre yang menggambarkan masyarakat masa depan yang suram.'
         ]);
 
+        Genre::create([
+            'name' => 'Romance',
+            'description' => 'Cerita yang berfokus pada hubungan romantis dan cinta.'
+        ]);
+
+        Genre::create([
+            'name' => 'Science Fiction',
+            'description' => 'Genre fiksi yang melibatkan teknologi dan sains masa depan.'
+        ]);
+
+        Genre::create([
+            'name' => 'Thriller',
+            'description' => 'Cerita yang menegangkan dan penuh ketegangan.'
+        ]);
+
+        Genre::create([
+            'name' => 'Historical',
+            'description' => 'Cerita yang berlatar belakang sejarah.'
+        ]);
+
     }
 }

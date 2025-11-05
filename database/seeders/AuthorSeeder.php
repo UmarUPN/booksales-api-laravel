@@ -44,5 +44,23 @@ class AuthorSeeder extends Seeder
             'bio' => 'Penulis novel distopia seperti 1984 dan Animal Farm.'
         ]);
 
+        Author::create([
+            'name' => 'Tere Liye',
+            'photo' => 'tereliye.jpg',
+            'bio' => 'Penulis Indonesia produktif dengan berbagai genre fiksi.'
+        ]);
+
+        Author::create([
+            'name' => 'Pramoedya Ananta Toer',
+            'photo' => 'pramoedya.jpg',
+            'bio' => 'Sastrawan Indonesia terkenal dengan Tetralogi Buru.'
+        ]);
+
+        Author::create([
+            'name' => 'Dee Lestari',
+            'photo' => 'dee.jpg',
+            'bio' => 'Penulis dan musisi Indonesia dengan karya kontemporer.'
+        ]);
+
     }
 }

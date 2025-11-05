@@ -11,12 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('transactions', function (Blueprint $table) {
+        Schema::create('cart_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->string('transaction_code')->unique(); // "INVOICE-" . strtoupper(uniqid());
-            $table->decimal('total_amount', 10, 2);
-            $table->enum('status', ['pending', 'paid', 'cancelled'])->default('pending');
+            $table->foreignId('book_id')->constrained()->onDelete('cascade');
+            $table->integer('quantity')->default(1);
             $table->timestamps();
         });
     }
@@ -26,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('transactions');
+        Schema::dropIfExists('cart_items');
     }
 };
