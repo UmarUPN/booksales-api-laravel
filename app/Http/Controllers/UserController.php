@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
@@ -105,6 +106,14 @@ class UserController extends Controller
                 'status' => false,
                 'message' => 'Resource Not Found!'
             ], 404);
+        }
+
+        # 1.1. Cek autorisasi - hanya user dengan id 1 yang bisa mengedit user dengan id 1
+        if ($id == 1 && (!Auth::check() || Auth::id() != 1)) { // Auth::id() != 1 berarti hanya user dengan ID 1 yang bisa mengedit user dengan ID 1
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: Only user with ID 1 can edit this resource!'
+            ], 403);
         }
 
         # 2. validator

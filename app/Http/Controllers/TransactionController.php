@@ -133,7 +133,7 @@ class TransactionController extends Controller
             ], 404);
         }
 
-        # 2. Validator (only status update for admin)
+        # 2. Validator
         $validator = Validator::make($request->all(), [
             'status' => 'required|in:pending,paid,cancelled'
         ]);

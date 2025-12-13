@@ -28,4 +28,9 @@ class Book extends Model
         return $this->belongsTo(Author::class);
     }
 
+    public function cartItems()
+    {
+        return $this->hasMany(CartItem::class);
+    }
+
 }

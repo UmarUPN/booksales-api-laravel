@@ -67,6 +67,13 @@ class AuthController extends Controller
 
         # 4. cek isFailed
         if (!$token = auth()->guard('api')->attempt($credentials)) {
+            // alur mendapatkan token yaitu, dari credentials, lalu dicek, jika valid maka generate token
+            // cek kredensial melalui auth lalu guard api (karena kita menggunakan guard api untuk jwt)
+
+            // auth()->guard('api') berarti kita menggunakan guard 'api' yang sudah dikonfigurasi di config/auth.php
+            // dengan kata lain ambil instance autentikasi yang menggunakan guard api, jadi semua operasi autentikasi berikutnya (login, attempt, check, logout) akan dilakukan menggunakan guard ini.
+            // Mencoba melakukan autentikasi dengan credentials yang diberikan (biasanya email dan password).
+            // Jika berhasil, mengembalikan token JWT (jika guard menggunakan JWT), atau true (jika session-based).
             return response()->json([
                 'success' => false,
                 'message' => 'Email atau password salah!'
